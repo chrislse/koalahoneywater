@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>考拉迷宫</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #f0f0f0;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        h1 {
+            font-size: 90%;
+        }
+        #gameContainer {
+            overflow: hidden;
+        }
+        #game {
+            position: relative;
+            margin: 1px 0;
+            border: 2px solid #333;
+            background: #fff;
+        }
+        .cell {
+            position: absolute;
+            box-sizing: border-box;
+        }
+        .wall {
+            background: #8B4513;
+            border: 1px solid #5C2C0B;
+        }
+        #koala {
+            position: absolute;
+            transition: 0.2s;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+	    filter: hue-rotate(60deg) brightness(0.8) saturate(150%);
+        }
+        #honey {
+            position: absolute;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1;
+        }
+        .btn {
+            padding: 5px 10px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #45a049;
+        }
+        /* On-screen mobile controls arranged in intuitive directional layout */
+        #controls {
+            display: grid;
+            grid-template-areas:
+                ". up ."
+                "left . right"
+                ". down .";
+            grid-gap: 10px;
+            width: 200px;
+            margin-bottom: 20px;
+        }
+        .control-btn {
+            width: 30px;
+            height: 30px;
+            font-size: 20px;
+            background: #ccc;
+            border: none;
+            border-radius: 10px;
+        }
+        .up { grid-area: up; }
+        .left { grid-area: left; }
+        .right { grid-area: right; }
+        .down { grid-area: down; }
+    </style>
+</head>
+<body>
+    <h1>帮助生病的考拉找到蜂蜜水！</h1>
+    <div id="gameContainer">
+        <div id="game"></div>
+    </div>
+    <!-- On-screen mobile controls with intuitive arrangement -->
+    <div id="controls">
+        <button class="control-btn up" onclick="moveKoala(0,-1)">↑</button>
+        <button class="control-btn left" onclick="moveKoala(-1,0)">←</button>
+        <button class="control-btn right" onclick="moveKoala(1,0)">→</button>
+        <button class="control-btn down" onclick="moveKoala(0,1)">↓</button>
+    </div>
+    <button class="btn" onclick="restartGame()">重新开始</button>
+    <script>
+        const GRID_SIZE = 15;
+        const CELL_SIZE = 25;
+        let koalaPos = {x: 0, y: 0};
+        let honeyPos = {x: GRID_SIZE - 1, y: GRID_SIZE - 1};
+        let maze = [];
+        let gameWon = false;
+
+        function createMaze() {
+            maze = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
+
+            function carve(x, y) {
+                maze[y][x] = 0;
+                const directions = [
+                    [0, -2], [2, 0], [0, 2], [-2, 0]
+                ].sort(() => Math.random() - 0.5);
+
+                for (let [dx, dy] of directions) {
+                    const newX = x + dx;
+                    const newY = y + dy;
+                    if (newX >= 0 && newX < GRID_SIZE && newY >= 0 && newY < GRID_SIZE && maze[newY][newX] === 1) {
+                        maze[y + dy / 2][x + dx / 2] = 0;
+                        carve(newX, newY);
+                    }
+                }
+            }
+
+            carve(0, 0);
+
+            // Ensure the area around the honey is clear
+            for (let y = honeyPos.y - 1; y <= honeyPos.y + 1; y++) {
+                for (let x = honeyPos.x - 1; x <= honeyPos.x + 1; x++) {
+                    if (y >= 0 && y < GRID_SIZE && x >= 0 && x < GRID_SIZE) {
+                        maze[y][x] = 0;
+                    }
+                }
+            }
+
+            // Ensure start is clear
+            maze[0][0] = 0;
+            maze[0][1] = 0;
+            maze[1][0] = 0;
+        }
+
+        function drawMaze() {
+            const game = document.getElementById('game');
+            game.style.width = GRID_SIZE * CELL_SIZE + 'px';
+            game.style.height = GRID_SIZE * CELL_SIZE + 'px';
+            game.innerHTML = '';
+
+            // Draw walls
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (maze[y][x] === 1) {
+                        const wall = document.createElement('div');
+                        wall.className = 'cell wall';
+                        wall.style.width = CELL_SIZE + 'px';
+                        wall.style.height = CELL_SIZE + 'px';
+                        wall.style.left = x * CELL_SIZE + 'px';
+                        wall.style.top = y * CELL_SIZE + 'px';
+                        game.appendChild(wall);
+                    }
+                }
+            }
+
+            // Draw koala
+            const koala = document.createElement('div');
+            koala.id = 'koala';
+            koala.textContent = '🐨';
+            koala.style.width = CELL_SIZE + 'px';
+            koala.style.height = CELL_SIZE + 'px';
+            koala.style.left = koalaPos.x * CELL_SIZE + 'px';
+            koala.style.top = koalaPos.y * CELL_SIZE + 'px';
+            game.appendChild(koala);
+
+            // Draw honey
+            const honey = document.createElement('div');
+            honey.id = 'honey';
+            honey.textContent = '🍯';
+            honey.style.width = CELL_SIZE + 'px';
+            honey.style.height = CELL_SIZE + 'px';
+            honey.style.left = honeyPos.x * CELL_SIZE + 'px';
+            honey.style.top = honeyPos.y * CELL_SIZE + 'px';
+            game.appendChild(honey);
+
+            adjustScale();
+        }
+
+        function moveKoala(dx, dy) {
+            if (gameWon) return;
+
+            const newX = koalaPos.x + dx;
+            const newY = koalaPos.y + dy;
+
+            if (newX >= 0 && newX < GRID_SIZE &&
+                newY >= 0 && newY < GRID_SIZE &&
+                maze[newY][newX] === 0) {
+
+                koalaPos.x = newX;
+                koalaPos.y = newY;
+
+                const koala = document.getElementById('koala');
+                koala.style.left = koalaPos.x * CELL_SIZE + 'px';
+                koala.style.top = koalaPos.y * CELL_SIZE + 'px';
+
+                // Check if reached the honey
+                if (koalaPos.x === honeyPos.x && koalaPos.y === honeyPos.y) {
+                    gameWon = true;
+                    koala.style.filter = 'none';
+                    setTimeout(() => alert('恭喜！考拉喝到了蜂蜜水，恢复健康了！'), 100);
+                }
+            }
+        }
+
+        function restartGame() {
+            koalaPos = {x: 0, y: 0};
+            gameWon = false;
+            createMaze();
+            drawMaze();
+        }
+
+        // Keyboard support
+        document.addEventListener('keydown', (e) => {
+            switch (e.key) {
+                case 'ArrowUp':
+                    moveKoala(0, -1);
+                    break;
+                case 'ArrowDown':
+                    moveKoala(0, 1);
+                    break;
+                case 'ArrowLeft':
+                    moveKoala(-1, 0);
+                    break;
+                case 'ArrowRight':
+                    moveKoala(1, 0);
+                    break;
+            }
+        });
+
+        // Touch support for swipe gestures
+        let touchStartX = null;
+        let touchStartY = null;
+        const gameDiv = document.getElementById('game');
+        gameDiv.addEventListener('touchstart', function(e) {
+            const touch = e.changedTouches[0];
+            touchStartX = touch.screenX;
+            touchStartY = touch.screenY;
+            e.preventDefault();
+        });
+        gameDiv.addEventListener('touchend', function(e) {
+            const touch = e.changedTouches[0];
+            const dx = touch.screenX - touchStartX;
+            const dy = touch.screenY - touchStartY;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                if (dx > 0) moveKoala(1, 0);
+                else moveKoala(-1, 0);
+            } else {
+                if (dy > 0) moveKoala(0, 1);
+                else moveKoala(0, -1);
+            }
+            e.preventDefault();
+        });
+
+        // Adjust scale for mobile responsiveness
+        function adjustScale() {
+            const game = document.getElementById('game');
+            const container = document.getElementById('gameContainer');
+            const gameWidth = GRID_SIZE * CELL_SIZE;
+            const gameHeight = GRID_SIZE * CELL_SIZE;
+            const availableWidth = window.innerWidth - 20;
+            const availableHeight = window.innerHeight - document.querySelector('h1').offsetHeight - 150;
+            const scaleX = availableWidth / gameWidth;
+            const scaleY = availableHeight / gameHeight;
+            const scale = Math.min(scaleX, scaleY, 1);
+            game.style.transform = 'scale(' + scale + ')';
+            game.style.transformOrigin = 'top left';
+            container.style.width = gameWidth * scale + 'px';
+            container.style.height = gameHeight * scale + 'px';
+        }
+
+        window.addEventListener('resize', adjustScale);
+
+        // Initialize game
+        restartGame();
+    </script>
+</body>
+</html>
